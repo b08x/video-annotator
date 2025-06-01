@@ -1,0 +1,666 @@
+@charset "UTF-8";
+.light {
+  --background: #F3F3F6;
+  --text: #1A1C1E;
+  --border: #C6C6C9;
+  --highlight: #fff;
+  --track: #86878A;
+  --link: #2872E3;
+}
+
+.dark {
+  --background: #1A1C1E;
+  --text: #fff;
+  --border: #37393C;
+  --highlight: #000;
+  --track: #37393C;
+  --link: #87A9FF;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-variant-ligatures: none;
+}
+
+:root {
+  --track-fill: #fff;
+  --mid: #757575;
+  font-family: "Space Mono", monospace;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: normal;
+}
+
+li {
+  list-style: none;
+}
+
+input, textarea {
+  font-family: "Space Mono", monospace;
+  background: none;
+  color: var(--text);
+  border: none;
+  outline: none;
+  font-size: 14px;
+  resize: none;
+  user-select: text;
+}
+input::placeholder, textarea::placeholder {
+  user-select: none;
+}
+
+textarea {
+  width: 100%;
+  background: var(--highlight);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  padding: 10px 15px;
+  margin-bottom: 10px;
+}
+textarea.active {
+  border-color: var(--text);
+}
+
+[role=button] {
+  cursor: pointer;
+}
+
+button {
+  font-family: "Space Mono", monospace;
+  background: none;
+  color: var(--text);
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+button:focus {
+  outline: none;
+}
+button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button .icon {
+  display: block;
+}
+
+.button {
+  padding: 8px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--border); /* Added for consistency */
+  background: var(--highlight); /* Added for consistency */
+}
+.button.inactive {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.icon {
+  font-family: "Material Symbols Outlined";
+  font-weight: 300;
+  line-height: 1;
+  font-size: 1.2em; /* Ensure icons are visible */
+}
+
+main {
+  max-width: 1200px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--text);
+}
+
+.top {
+  display: flex;
+  min-height: 50vh; /* Adjusted for better layout with video */
+  max-height: 60vh; /* Prevent top section from growing too large */
+  border-bottom: 1px solid var(--border);
+}
+
+.tools {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  overflow: hidden;
+  transition: opacity 0.2s;
+}
+.tools.inactive {
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.collapseButton {
+  border-left: 1px solid var(--border);
+  width: 30px; /* Increased width for easier clicking */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background); /* Ensure it has a background */
+}
+.collapseButton .icon {
+  font-size: 24px;
+  color: var(--text);
+}
+
+.modeSelector {
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* Adjusted gap */
+  overflow: hidden;
+  width: 280px; /* Slightly wider */
+  flex-shrink: 0; /* Prevent shrinking */
+  border-right: 1px solid var(--border); /* Add separator */
+}
+
+.modeSelector.hide {
+  width: 0;
+  padding: 0;
+  border-right: none;
+  overflow: hidden;
+}
+.modeSelector > div {
+  padding: 15px; /* Adjusted padding */
+}
+.modeSelector > div:first-child {
+  flex: 1;
+  overflow-y: auto; /* Allow scrolling for content */
+  padding-bottom: 10px;
+}
+.modeSelector > div:last-child { /* Back button container */
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  flex-shrink: 0;
+}
+.modeSelector h2 {
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  margin-bottom: 10px; /* Adjusted margin */
+}
+.modeSelector.inactive {
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.modeList {
+  flex-direction: column;
+  display: flex;
+  gap: 8px; /* Adjusted gap */
+}
+.modeList .button {
+  justify-content: flex-start;
+  gap: 10px; /* Adjusted gap */
+  transition: background 0.2s, border-color 0.2s;
+  background: var(--highlight);
+  outline: 1px solid var(--border);
+  white-space: nowrap;
+  border-radius: 8px;
+  min-width: fit-content;
+  width: 100%;
+  text-align: left;
+}
+.modeList .button:hover {
+  background: var(--border);
+  border-color: var(--text); /* Highlight on hover */
+}
+.modeList .button.active {
+  outline: none; /* Remove default outline */
+  border: 2px solid var(--link); /* Use link color for active border */
+  background: var(--background); /* Slightly different background for active */
+}
+.modeList + textarea {
+  margin-top: 10px;
+}
+
+.generateButton {
+  padding: 10px 15px; /* Adjusted padding */
+  background: var(--link); /* Use link color for primary action */
+  color: var(--highlight); /* Text color for primary button */
+  width: 100%;
+  border: 1px solid var(--link);
+  margin-top: 10px; /* Add some space above */
+}
+.generateButton:hover:not([disabled]) {
+  opacity: 0.8;
+}
+
+
+.backButton {
+  border-top: none !important;
+}
+.backButton button {
+  font-size: 14px;
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.backButton button:hover {
+  background-color: var(--border);
+}
+
+
+.output {
+  flex: 1;
+  padding: 20px 15px;
+  overflow: auto;
+  position: relative;
+}
+.output:hover .sentence {
+  opacity: 0.5;
+}
+.output time {
+  color: var(--link);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: inherit;
+  text-decoration: underline;
+}
+.output .sentence {
+  font-size: 18px;
+  line-height: 1.8;
+  display: inline;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-right: 0.25em; /* Add space after sentence */
+}
+.output .sentence:hover {
+  opacity: 1;
+}
+.output .sentence time {
+  margin-right: 8px;
+}
+.output ul {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.output ul button {
+  font-size: 15px;
+  display: flex;
+  gap: 15px;
+  text-align: left;
+  padding: 10px 15px;
+  border-radius: 6px;
+  width: 100%;
+  border: 1px solid transparent; /* For consistency */
+}
+.output ul button:hover {
+  background: var(--border);
+  border-color: var(--text);
+}
+.output ul button p {
+  font-size: 14px;
+}
+
+.modeEmojis .sentence {
+  font-size: 40px;
+  margin-right: 20px;
+}
+.modeEmojis .sentence time {
+  top: -8px;
+}
+
+.modeHaiku .sentence {
+  display: block;
+  font-size: 20px;
+}
+.modeHaiku .sentence time {
+  top: -5px;
+}
+
+.modeTable table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.modeTable th {
+  text-align: left;
+  background-color: var(--background); /* Header background */
+  border-bottom: 2px solid var(--text); /* Stronger border for header */
+}
+.modeTable th, .modeTable td {
+  padding: 10px;
+  border: 1px solid var(--border); /* Cell borders */
+}
+.modeTable tr:not(thead tr) { /* Apply to tbody rows only */
+  border-bottom: 1px solid var(--border);
+  display: table-row;
+}
+.modeTable tr:not(thead tr):hover {
+  background: var(--border);
+}
+.modeTable thead tr:hover {
+  background: transparent;
+}
+
+.modelSelector {
+  position: relative;
+  margin-bottom: 10px;
+}
+.modelSelector::after {
+  content: "▾";
+  display: block;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-55%);
+  pointer-events: none; /* Allow click on select */
+}
+.modelSelector select {
+  width: 100%;
+  appearance: none;
+  color: var(--text);
+  background: var(--highlight); /* Use highlight for select background */
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px; /* Adjusted padding */
+  font-family: "Space Mono", monospace;
+  outline: none;
+}
+.modelSelector select:focus {
+  border-color: var(--link); /* Highlight focus */
+}
+
+
+.loading span {
+  display: inline-block;
+  animation: loading steps(4, jump-none) 777ms infinite;
+  width: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+@keyframes loading {
+  to {
+    width: 30px; /* Adjusted width of dots */
+  }
+}
+
+.lineChart {
+  width: 100%;
+  height: 100%;
+  min-height: 250px; /* Ensure chart has some height */
+}
+.lineChart path {
+  fill: none;
+  stroke: var(--link);
+  stroke-width: 2;
+}
+.lineChart circle {
+  fill: var(--background);
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.axisLabels text {
+  text-anchor: middle;
+  font-size: 12px;
+  fill: var(--text);
+}
+
+.axisTitle {
+  font-size: 12px;
+  fill: var(--text);
+  text-anchor: middle; /* Center title */
+}
+
+.dataPoint text {
+  fill: var(--text);
+  font-size: 12px;
+  text-anchor: middle;
+}
+
+.timeLabels text {
+  cursor: pointer;
+  fill: var(--link);
+  text-decoration: underline;
+}
+.timeLabels text:hover {
+  font-weight: bold;
+}
+
+video {
+  max-height: calc(100% - 60px); /* Account for controls height */
+  width: 100%;
+  height: 100%; /* Make video fill its container */
+  margin: 0 auto;
+  display: block; /* Remove extra space below video */
+  background-color: #000; /* Ensure black background if video not loaded */
+}
+
+.videoPlayer {
+  flex: 1;
+  background: #000;
+  display: flex;
+  align-items: stretch; /* Stretch video vertically */
+  flex-direction: column;
+  justify-content: center; /* Center video if it's smaller than container */
+  font-size: 0;
+  position: relative;
+  user-select: none;
+  overflow: hidden; /* Prevent content spill */
+  min-width: 0; /* For flexbox proper sizing */
+}
+
+.videoPlayer:has(.timecodeMarker:hover) .videoCaption {
+  opacity: 0;
+}
+.videoPlayer > div:first-child { /* Container for video element */
+  display: flex; /* Use flex to contain video */
+  flex: 1; /* Allow video to grow */
+  align-items: center; /* Center video vertically */
+  justify-content: center; /* Center video horizontally */
+  overflow: hidden; /* Clip video if too large */
+}
+
+.emptyVideo {
+  height: 100%; /* Take full height of parent */
+  min-height: 200px; /* Minimum height */
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  padding: 20px;
+}
+.emptyVideo p {
+  max-width: 500px;
+  text-align: center;
+}
+.emptyVideo p span {
+  display: inline-block;
+  rotate: -45deg;
+}
+
+.videoCaption {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  position: absolute;
+  bottom: 80px; /* Adjust if controls height changes */
+  text-align: center;
+  padding: 10px 15px; /* Increased padding */
+  color: #fff;
+  max-width: calc(100% - 60px); /* Max width relative to player */
+  font-size: 15px;
+  margin-inline: auto; /* Center horizontally */
+  left: 0;
+  right: 0;
+  width: fit-content; /* Only as wide as content */
+  border-radius: 5px;
+  transition: opacity 0.2s;
+  z-index: 10; /* Ensure caption is above video but below some controls if needed */
+}
+
+.videoControls {
+  font-size: 12px;
+  position: relative;
+  background: var(--background);
+  color: var(--text); /* Ensure text in controls is visible */
+  z-index: 20; /* Keep controls above other elements */
+}
+.videoControls:hover .videoScrubber, .videoControls:hover .timecodeMarkerTick {
+  scale: 1 2.3;
+}
+
+.videoScrubber {
+  height: 5px;
+  transform-origin: bottom;
+  transition: all 0.2s;
+  overflow: hidden;
+  cursor: pointer; /* Indicate it's interactive */
+}
+.videoScrubber input {
+  position: relative;
+  top: -8px; /* Adjust thumb position */
+  height: 5px; /* Scrubber track height */
+  appearance: none;
+  width: 100%;
+  background-image: linear-gradient(to right, var(--link) 0%, var(--link) var(--pct), var(--track) var(--pct), var(--track) 100%); /* Use link color for played part */
+}
+.videoScrubber input::-webkit-slider-thumb {
+  opacity: 0; /* Keep thumb hidden, interaction is on track */
+}
+.videoScrubber input::-moz-range-thumb {
+  opacity: 0;
+}
+
+
+.videoTime {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px; /* Adjusted padding */
+  font-size: 14px; /* Slightly larger time font */
+  border-top: 1px solid var(--border);
+}
+.videoTime button {
+  font-size: 24px; /* Larger play/pause icon */
+  padding: 5px; /* Add some padding for easier click */
+}
+.videoTime button .icon {
+  display: block; /* Ensure icon fills button */
+}
+
+.timecodeList {
+  overflow: auto;
+  padding: 10px 20px;
+}
+.timecodeList td {
+  padding: 10px 5px;
+}
+.timecodeList button {
+  color: var(--link);
+}
+.timecodeList button:hover {
+  color: var(--link);
+  text-decoration: underline; /* Add underline on hover */
+}
+
+.timecodeMarkers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.timecodeMarker {
+  position: absolute;
+  top: 0;
+  width: 10px;
+  background: rgba(0, 0, 0, 0.01); /* For hover detection */
+  translate: -4px 0; /* Center the marker */
+}
+.timecodeMarker:hover .timecodeMarkerLabel {
+  opacity: 1;
+  visibility: visible; /* Ensure it's visible on hover */
+}
+
+.timecodeMarkerTick {
+  height: 5px;
+  pointer-events: auto;
+  cursor: pointer;
+  transform-origin: bottom;
+  transition: all 0.2s;
+  background: rgba(0, 0, 0, 0.01); /* For hover detection */
+  overflow: hidden;
+}
+.timecodeMarkerTick > div {
+  width: 3px;
+  height: 100%;
+  background: var(--link);
+  translate: 3px 0; /* Adjust position within tick area */
+}
+
+.timecodeMarkerLabel {
+  background: rgba(0, 0, 0, 0.85); /* Slightly more opaque background */
+  backdrop-filter: blur(8px); /* Adjust blur */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* Softer shadow */
+  opacity: 0;
+  visibility: hidden; /* Hide when not hovered */
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* Reduced gap */
+  font-size: 11px;
+  transition: opacity 0.1s, visibility 0.1s;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  translate: 0 calc(-100% - 10px); /* Adjust distance from scrubber */
+  z-index: 99;
+  padding: 6px 8px; /* Adjusted padding */
+  border-radius: 4px; /* Smaller radius */
+  width: max-content;
+  max-width: 200px;
+  color: #e0e0e0; /* Lighter text for label time */
+}
+.timecodeMarkerLabel.right {
+  right: 0;
+  left: auto; /* Ensure right alignment works */
+}
+.timecodeMarkerLabel p {
+  color: #fff; /* Brighter text for main content */
+  font-size: 13px;
+  margin: 0; /* Remove default margin */
+}
+
+.exportButton {
+  margin-top: 20px;
+  padding: 10px 15px;
+  width: 100%;
+  background-color: var(--link); /* Use link color for primary action */
+  color: var(--highlight); /* Text color for primary button */
+  border: 1px solid var(--link);
+}
+.exportButton .icon {
+  margin-right: 8px; /* Space between icon and text */
+}
+.exportButton:hover:not([disabled]) {
+  opacity: 0.85; /* Slight opacity change on hover */
+}
+
+/* Accessibility improvements */
+[role="button"]:focus, button:focus, select:focus, textarea:focus, input[type="range"]:focus {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
