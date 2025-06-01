@@ -1,3 +1,4 @@
+
 @charset "UTF-8";
 .light {
   --background: #F3F3F6;
@@ -314,6 +315,20 @@ main {
   font-size: 14px;
 }
 
+.output .jsonOutput {
+  background-color: var(--highlight);
+  border: 1px solid var(--border);
+  padding: 15px;
+  border-radius: 8px;
+  white-space: pre-wrap; /* Allows wrapping and preserves whitespace */
+  word-wrap: break-word; /* Breaks long words to prevent overflow */
+  font-size: 13px;
+  color: var(--text);
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+
 .modeEmojis .sentence {
   font-size: 40px;
   margin-right: 20px;
@@ -483,15 +498,35 @@ video {
   justify-content: center;
   font-size: 16px;
   padding: 20px;
+  text-align: center; /* Center text within emptyVideo */
 }
-.emptyVideo p {
-  max-width: 500px;
-  text-align: center;
+
+.uploadPrompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px; /* Space between messages and button */
 }
-.emptyVideo p span {
-  display: inline-block;
-  rotate: -45deg;
+
+.uploadPrompt p {
+  margin: 0; /* Reset paragraph margin */
+  color: #fff; /* Ensure text is visible on dark background */
 }
+
+.selectFileButton {
+  background-color: var(--link) !important; /* Use var for link color */
+  color: var(--highlight) !important; /* Use var for text on link color */
+  border: 1px solid var(--link) !important; /* Use var for border */
+  padding: 10px 20px !important; /* More prominent padding */
+  border-radius: 8px !important; /* Consistent border radius */
+  font-size: 16px !important; /* Slightly larger font */
+  margin-top: 5px; /* Space above the button */
+}
+
+.selectFileButton:hover:not([disabled]) {
+  opacity: 0.85;
+}
+
 
 .videoCaption {
   background: rgba(0, 0, 0, 0.8);

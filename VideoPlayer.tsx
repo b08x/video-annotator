@@ -39,6 +39,8 @@ interface VideoPlayerProps {
   isLoadingVideo: boolean;
   videoError: boolean;
   jumpToTimecode: (timeInSeconds: number) => void;
+  videoRef: React.RefObject<HTMLVideoElement>; 
+  onUploadButtonClick?: () => void; // New prop for upload button
 }
 
 export default function VideoPlayer({
@@ -48,20 +50,21 @@ export default function VideoPlayer({
   isLoadingVideo,
   videoError,
   jumpToTimecode,
+  videoRef,
+  onUploadButtonClick, // Destructure new prop
 }: VideoPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null); // Use useRef for video element
   const [duration, setDuration] = useState(0);
-  const [scrubberTime, setScrubberTime] = useState(0); // Represents fraction of video played (0 to 1)
+  const [scrubberTime, setScrubberTime] = useState(0); 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [currentCaption, setCurrentCaption] = useState<string | undefined>(undefined);
   
-  const currentSecs = videoRef.current?.currentTime || 0; // Get current time directly from video element
+  const currentSecs = videoRef.current?.currentTime || 0;
   const currentPercent = duration > 0 ? (currentSecs / duration) * 100 : 0;
 
 
   const timecodeListReversed = useMemo(
-    () => timecodeList?.slice().reverse(), // Use slice to avoid mutating original array
+    () => timecodeList?.slice().reverse(),
     [timecodeList],
   );
 
@@ -73,7 +76,7 @@ export default function VideoPlayer({
         videoRef.current.play().catch(error => console.error("Error attempting to play video:", error));
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, videoRef]);
 
   const updateDuration = () => {
     if (videoRef.current) {
@@ -103,19 +106,15 @@ export default function VideoPlayer({
     setScrubberTime(0);
     setIsPlaying(false);
     if (videoRef.current) {
-      videoRef.current.currentTime = 0; // Reset video to start
+      videoRef.current.currentTime = 0;
     }
-  }, [url]);
+  }, [url, videoRef]);
 
   useEffect(() => {
     if (videoRef.current && requestedTimecode !== null && !isNaN(requestedTimecode)) {
       videoRef.current.currentTime = requestedTimecode;
-      // Optional: auto-play when jumping if video is paused
-      // if (videoRef.current.paused) {
-      //   videoRef.current.play().catch(error => console.error("Error attempting to play video:", error));
-      // }
     }
-  }, [requestedTimecode]); // Removed videoRef from dependencies as it's stable
+  }, [requestedTimecode, videoRef]);
 
   useEffect(() => {
     const onKeyPress = (e: KeyboardEvent) => {
@@ -125,12 +124,12 @@ export default function VideoPlayer({
         e.target.tagName !== 'TEXTAREA' &&
         e.key === ' '
       ) {
-        e.preventDefault(); // Prevent space from scrolling page
+        e.preventDefault();
         togglePlay();
       }
     };
 
-    document.addEventListener('keydown', onKeyPress); // Use keydown for better spacebar handling
+    document.addEventListener('keydown', onKeyPress);
 
     return () => {
       document.removeEventListener('keydown', onKeyPress);
@@ -145,22 +144,21 @@ export default function VideoPlayer({
     }
   };
   
-  const videoElement = videoRef.current;
 
   return (
     <div className="videoPlayer">
       {url && !isLoadingVideo ? (
         <>
-          <div className="videoContainer"> {/* Added container for positioning caption */}
+          <div className="videoContainer">
             <video
               src={url}
               ref={videoRef}
               onClick={togglePlay}
-              onLoadedMetadata={updateDuration} // Use onLoadedMetadata for duration
+              onLoadedMetadata={updateDuration}
               onTimeUpdate={updateTime}
               onPlay={onPlay}
               onPause={onPause}
-              preload="metadata" // Changed from auto to metadata
+              preload="metadata"
               crossOrigin="anonymous"
               aria-label="Video content"
             />
@@ -195,7 +193,7 @@ export default function VideoPlayer({
                     className="timecodeMarker"
                     key={i}
                     style={{left: `${pct}%`}}
-                    aria-hidden="true" // Markers are supplementary; main info in list
+                    aria-hidden="true"
                     >
                     <button
                       className="timecodeMarkerTick"
@@ -225,13 +223,23 @@ export default function VideoPlayer({
         </>
       ) : (
         <div className="emptyVideo" role="status">
-          <p>
-            {isLoadingVideo
-              ? 'Processing video...'
-              : videoError
-                ? 'Error processing video. Please try a different file or check console for details.'
-                : 'Drag and drop a video file here to get started.'}
-          </p>
+          {isLoadingVideo ? (
+            <p>Processing video...</p>
+          ) : videoError ? (
+            <p>Error processing video. Please try a different file or check console for details.</p>
+          ) : (
+            <div className="uploadPrompt">
+              <p>Drag and drop a video file here</p>
+              {onUploadButtonClick && (
+                <>
+                  <p>or</p>
+                  <button onClick={onUploadButtonClick} className="button selectFileButton" aria-label="Select video file from device">
+                    Select File
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

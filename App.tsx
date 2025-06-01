@@ -19,7 +19,7 @@
 
 import c from 'classnames';
 import {useRef, useState, useEffect} from 'react';
-import {generateContent, uploadFile} from './api';
+import {generateContent, uploadFile as uploadFileToApi} from './api'; // Aliased import
 import Chart from './Chart.jsx';
 import functions from './functions';
 import modesData from './modes'; // Renamed import for clarity
@@ -39,6 +39,7 @@ interface Mode {
   prompt: string | ((input: string) => string);
   isList?: boolean;
   subModes?: Record<string, string>;
+  isRegisterType?: boolean;
 }
 
 interface Modes {
@@ -64,6 +65,7 @@ export default function App() {
   const [vidUrl, setVidUrl] = useState<string | null>(null);
   const [file, setFile] = useState<AppFileState | null>(null);
   const [timecodeList, setTimecodeList] = useState<Timecode[] | null>(null);
+  const [registerAnalysisResult, setRegisterAnalysisResult] = useState<object | null>(null);
   const [requestedTimecode, setRequestedTimecode] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState<string>(Object.keys(modes)[0]);
   const [activeMode, setActiveMode] = useState<string | undefined>();
@@ -81,6 +83,9 @@ export default function App() {
       : 'light',
   );
   const scrollRef = useRef<HTMLElement>(null);
+  const inputFileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
   const isCustomMode = selectedMode === 'Custom';
   const isChartMode = selectedMode === 'Chart';
   const isCustomChartMode = isChartMode && chartMode === 'Custom';
@@ -90,6 +95,10 @@ export default function App() {
     setTimecodeList(
       timecodes.map((t) => ({...t, text: t.text ? t.text.replace(/\\'/g, "'") : ''})),
     );
+  
+  const setRegisterResult = ({ analysisResult }: { analysisResult: object }) => {
+    setRegisterAnalysisResult(analysisResult);
+  };
 
   const onModeSelect = async (mode: string) => {
     if (!file) return; // Ensure file is uploaded before generating
@@ -97,6 +106,7 @@ export default function App() {
     setIsLoading(true);
     setChartLabel(chartPrompt);
     setTimecodeList(null); // Clear previous results
+    setRegisterAnalysisResult(null); // Clear previous register results
 
     const currentModeConfig = modes[mode as keyof typeof modes];
     let promptValue: string;
@@ -117,58 +127,81 @@ export default function App() {
         set_timecodes_with_objects: setTimecodes,
         set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
           setTimecodeList(timecodes),
+        set_register_analysis_result: setRegisterResult,
       }),
-      { uri: file.uri, mimeType: file.apiMimeType }, // Pass API-relevant mimeType
+      { uri: file.uri, mimeType: file.apiMimeType },
     );
 
-    const call = resp.functionCalls?.[0];
-
-    if (call) {
+    if (resp.functionCalls && resp.functionCalls.length > 0) {
       const fnMap = {
         set_timecodes: setTimecodes,
         set_timecodes_with_objects: setTimecodes,
         set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
           setTimecodeList(timecodes),
+        set_register_analysis_result: setRegisterResult,
       };
-      (fnMap as any)[call.name](call.args);
+      for (const call of resp.functionCalls) {
+        if (fnMap[call.name as keyof typeof fnMap]) {
+          (fnMap as any)[call.name](call.args);
+        } else {
+          console.warn(`Unknown function call in response: ${call.name}`);
+        }
+      }
     }
 
     setIsLoading(false);
     scrollRef.current?.scrollTo({top: 0, behavior: 'smooth'});
   };
 
-  const uploadVideo = async (e: React.DragEvent<HTMLElement>) => {
-    e.preventDefault();
-    const clientUploadedFile = e.dataTransfer.files[0]; // Original File object from browser
+  const processAndSetFile = async (clientUploadedFile: File | null) => {
     if (!clientUploadedFile) return;
 
     setIsLoadingVideo(true);
     setVidUrl(URL.createObjectURL(clientUploadedFile));
-    setTimecodeList(null); // Clear previous annotations
-    setFile(null); // Clear previous file state
+    setTimecodeList(null);
+    setRegisterAnalysisResult(null);
+    setFile(null);
     setVideoError(false);
 
     try {
-      // res is FileMetadata from Google API
-      const res = await uploadFile(clientUploadedFile); 
+      const res = await uploadFileToApi(clientUploadedFile);
       setFile({
-        displayName: res.displayName || clientUploadedFile.name, // Use API displayName, fallback to original name
-        apiMimeType: res.mimeType, // MIME type from Google API
-        originalMimeType: clientUploadedFile.type, // Original MIME type from browser's File object
-        uri: res.uri, // URI from Google API
-        name: clientUploadedFile.name, // Store original file name from browser
+        displayName: res.displayName || clientUploadedFile.name,
+        apiMimeType: res.mimeType,
+        originalMimeType: clientUploadedFile.type,
+        uri: res.uri,
+        name: clientUploadedFile.name,
       });
       setIsLoadingVideo(false);
     } catch (err) {
-      console.error(err);
+      console.error('Error processing file:', err);
       setVideoError(true);
       setIsLoadingVideo(false);
     }
   };
 
+  const handleDragUpload = async (e: React.DragEvent<HTMLElement>) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files[0];
+    processAndSetFile(droppedFile);
+  };
+
+  const handleFileSelectedChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files ? event.target.files[0] : null;
+    processAndSetFile(selectedFile);
+    if (event.target) { // Clear input value to allow re-selecting the same file
+      event.target.value = '';
+    }
+  };
+
+  const handleUploadButtonClick = () => {
+    inputFileRef.current?.click();
+  };
+
+
   const handleExport = () => {
     if (!timecodeList || timecodeList.length === 0 || !file || !file.name) {
-      alert("No annotations or video file details available to export. Please ensure a video is processed and has a valid file name.");
+      alert("No VTT-compatible annotations or video file details available to export. Please ensure a video is processed and has a valid file name.");
       return;
     }
 
@@ -185,17 +218,18 @@ export default function App() {
           endTimeSecs = startTimeSecs + 0.5; 
         }
       } else {
-        endTimeSecs = startTimeSecs + 5; 
+        const videoDuration = videoRef.current?.duration;
+        if (videoDuration && startTimeSecs < videoDuration) {
+           endTimeSecs = Math.min(startTimeSecs + 5, videoDuration);
+        } else {
+           endTimeSecs = startTimeSecs + 5;
+        }
       }
 
       const captionText = item.value !== undefined ? String(item.value) : (item.text || "");
       
-      // VTT cue identifiers are optional, but can be useful.
-      // Using index + 1 is a common practice.
       vttContent += `${index + 1}\n`; 
       vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
-      // Newlines within VTT caption text itself are typically represented by spaces or handled by player.
-      // For simplicity and broad compatibility, replace newlines with spaces.
       vttContent += `${captionText.replace(/\n/g, ' ')}\n\n`;
     });
     
@@ -211,17 +245,24 @@ export default function App() {
     document.body.removeChild(anchor);
     URL.revokeObjectURL(anchor.href);
   };
-
+  
   const currentActiveModeConfig = activeMode ? modes[activeMode as keyof typeof modes] : undefined;
 
 
   return (
     <main
       className={theme}
-      onDrop={uploadVideo}
+      onDrop={handleDragUpload}
       onDragOver={(e) => e.preventDefault()}
       onDragEnter={() => {}}
       onDragLeave={() => {}}>
+      <input 
+        type="file" 
+        ref={inputFileRef} 
+        style={{ display: 'none' }} 
+        onChange={handleFileSelectedChange} 
+        accept="video/*" 
+      />
       <section className="top">
         {vidUrl && !isLoadingVideo && (
           <>
@@ -246,7 +287,7 @@ export default function App() {
                           aria-label="Custom prompt for video analysis"
                         />
                       </>
-                    ) : (
+                    ) : ( // Chart Mode
                       <>
                         <h2>Chart this video by:</h2>
 
@@ -306,7 +347,7 @@ export default function App() {
                     </button>
                   </div>
                 </>
-              ) : (
+              ) : ( // Main Mode List
                 <>
                   <div>
                     <h2>Explore this video via:</h2>
@@ -358,12 +399,14 @@ export default function App() {
           jumpToTimecode={setRequestedTimecode}
           isLoadingVideo={isLoadingVideo}
           videoError={videoError}
+          videoRef={videoRef}
+          onUploadButtonClick={handleUploadButtonClick} // Pass handler to VideoPlayer
         />
       </section>
 
       <div className={c('tools', {inactive: !vidUrl || !file})}>
         <section
-          className={c('output', {['mode' + activeMode]: activeMode})}
+          className={c('output', {['mode' + activeMode?.replace(/[^a-zA-Z0-9]/g, '')]: activeMode})}
           ref={scrollRef}
           aria-live="polite"
           aria-busy={isLoading}
@@ -372,84 +415,105 @@ export default function App() {
             <div className="loading" role="status">
               Waiting for model<span>...</span>
             </div>
-          ) : timecodeList ? (
+          ) : (
             <>
-            {activeMode === 'Table' ? (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Description</th>
-                    <th>Objects</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {timecodeList.map(({time, text, objects}, i) => (
-                    <tr
-                      key={i}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setRequestedTimecode(timeToSecs(time))}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setRequestedTimecode(timeToSecs(time))}}
-                      >
-                      <td>
+              {/* Section for Timecode-based output */}
+              {timecodeList && timecodeList.length > 0 && (
+                <div className="timecodeOutputSection">
+                  {activeMode === 'Table' ? (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Time</th>
+                          <th>Description</th>
+                          <th>Objects</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {timecodeList.map(({time, text, objects}, i) => (
+                          <tr
+                            key={i}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setRequestedTimecode(timeToSecs(time))}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setRequestedTimecode(timeToSecs(time))}}
+                            >
+                            <td>
+                              <time dateTime={time}>{time}</time>
+                            </td>
+                            <td>{text}</td>
+                            <td>{objects && objects.join(', ')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : activeMode === 'Chart' ? (
+                    <Chart
+                      data={timecodeList.filter(item => typeof item.value === 'number') as Array<{time: string; value: number}>}
+                      yLabel={isCustomChartMode ? chartLabel : modes.Chart.subModes?.[chartMode] || chartLabel}
+                      jumpToTimecode={setRequestedTimecode}
+                    />
+                  ) : currentActiveModeConfig?.isList ? (
+                    <ul>
+                      {timecodeList.map(({time, text}, i) => (
+                        <li key={i} className="outputItem">
+                          <button
+                            onClick={() => setRequestedTimecode(timeToSecs(time))}
+                            aria-label={`Jump to ${time} - ${text}`}
+                            >
+                            <time dateTime={time}>{time}</time>
+                            <p className="text">{text}</p>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    timecodeList.map(({time, text}, i) => (
+                      text ? <span
+                        key={i}
+                        className="sentence"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setRequestedTimecode(timeToSecs(time))}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setRequestedTimecode(timeToSecs(time))}}
+                        aria-label={`Jump to ${time} - ${text}`}
+                        >
                         <time dateTime={time}>{time}</time>
-                      </td>
-                      <td>{text}</td>
-                      <td>{objects && objects.join(', ')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : activeMode === 'Chart' ? (
-              <Chart
-                data={timecodeList.filter(item => typeof item.value === 'number') as Array<{time: string; value: number}>}
-                yLabel={isCustomChartMode ? chartLabel : modes.Chart.subModes?.[chartMode] || chartLabel}
-                jumpToTimecode={setRequestedTimecode}
-              />
-            ) : currentActiveModeConfig?.isList ? (
-              <ul>
-                {timecodeList.map(({time, text}, i) => (
-                  <li key={i} className="outputItem">
+                        <span>{text}</span>
+                      </span> : null
+                    ))
+                  )}
+                  {file && (
                     <button
-                      onClick={() => setRequestedTimecode(timeToSecs(time))}
-                      aria-label={`Jump to ${time} - ${text}`}
-                      >
-                      <time dateTime={time}>{time}</time>
-                      <p className="text">{text}</p>
+                      className="button exportButton"
+                      onClick={handleExport}
+                      disabled={!file.name}
+                      aria-label="Export annotations as VTT file"
+                    >
+                      <span className="icon" aria-hidden="true">download</span>
+                      Export VTT File
                     </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              timecodeList.map(({time, text}, i) => (
-                text ? <span
-                  key={i}
-                  className="sentence"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setRequestedTimecode(timeToSecs(time))}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setRequestedTimecode(timeToSecs(time))}}
-                  aria-label={`Jump to ${time} - ${text}`}
-                  >
-                  <time dateTime={time}>{time}</time>
-                  <span>{text}</span>
-                </span> : null
-              ))
-            )}
-            {timecodeList && timecodeList.length > 0 && file && (
-              <button
-                className="button exportButton"
-                onClick={handleExport}
-                disabled={!file || !file.name}
-                aria-label="Export annotations as VTT file"
-              >
-                <span className="icon" aria-hidden="true">download</span>
-                Export VTT File
-              </button>
-            )}
+                  )}
+                </div>
+              )}
+
+              {/* Section for Register Analysis JSON output */}
+              {currentActiveModeConfig?.isRegisterType && registerAnalysisResult && (
+                <div className="registerOutputSection" style={{ marginTop: (timecodeList && timecodeList.length > 0) ? '20px' : '0' }}>
+                  <h4>{activeMode} - Structured Analysis:</h4>
+                  <pre className="jsonOutput">{JSON.stringify(registerAnalysisResult, null, 2)}</pre>
+                </div>
+              )}
+
+              {/* Fallback message if no data loaded and not loading */}
+              {!isLoading && 
+               (!timecodeList || timecodeList.length === 0) && 
+               (!registerAnalysisResult || Object.keys(registerAnalysisResult).length === 0) && 
+               vidUrl && file && activeMode && (
+                <p>No annotations or analysis generated for this mode yet, or the model didn't return any.</p>
+              )}
             </>
-          ) : (vidUrl && file && activeMode && !isLoading && <p>No annotations generated for this mode yet, or the model didn't return any.</p>)}
+          )}
         </section>
       </div>
     </main>

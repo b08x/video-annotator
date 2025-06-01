@@ -6,8 +6,7 @@
 
 import {FunctionDeclaration, GoogleGenAI, Type} from '@google/genai';
 
-const systemInstruction = `When given a video and a query, call the relevant \
-function only once with the appropriate timecodes and text for the video`;
+const systemInstruction = `When analyzing a video based on a user query, call the appropriate function(s) to provide the requested information. If multiple types of information are requested (e.g., timecoded segments and a summary JSON), call the relevant functions sequentially as needed.`;
 
 // Use process.env.API_KEY as per guidelines
 const client = new GoogleGenAI({apiKey: process.env.API_KEY});
