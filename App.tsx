@@ -55,6 +55,13 @@ interface AppFileState {
   name: string; // Original file name from browser File object
 }
 
+// New interface for Topic Segmentation
+interface TopicSegment {
+  startTime: string; // e.g., "00:01:15"
+  endTime: string;   // e.g., "00:05:30"
+  topicDescription: string;
+}
+
 
 const modes: Modes = modesData; // Assert type for modes
 
@@ -66,6 +73,7 @@ export default function App() {
   const [file, setFile] = useState<AppFileState | null>(null);
   const [timecodeList, setTimecodeList] = useState<Timecode[] | null>(null);
   const [registerAnalysisResult, setRegisterAnalysisResult] = useState<object | null>(null);
+  const [topicSegments, setTopicSegments] = useState<TopicSegment[] | null>(null); // New state for topic segments
   const [requestedTimecode, setRequestedTimecode] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState<string>(Object.keys(modes)[0]);
   const [activeMode, setActiveMode] = useState<string | undefined>();
@@ -107,6 +115,7 @@ export default function App() {
     setChartLabel(chartPrompt);
     setTimecodeList(null); // Clear previous results
     setRegisterAnalysisResult(null); // Clear previous register results
+    setTopicSegments(null); // Clear previous topic segments
 
     const currentModeConfig = modes[mode as keyof typeof modes];
     let promptValue: string;
@@ -128,6 +137,7 @@ export default function App() {
         set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
           setTimecodeList(timecodes),
         set_register_analysis_result: setRegisterResult,
+        // Potentially add a new function callback here for setting topic segments if API provides them
       }),
       { uri: file.uri, mimeType: file.apiMimeType },
     );
@@ -139,6 +149,7 @@ export default function App() {
         set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
           setTimecodeList(timecodes),
         set_register_analysis_result: setRegisterResult,
+         // Potentially map the new function call here
       };
       for (const call of resp.functionCalls) {
         if (fnMap[call.name as keyof typeof fnMap]) {
@@ -160,6 +171,7 @@ export default function App() {
     setVidUrl(URL.createObjectURL(clientUploadedFile));
     setTimecodeList(null);
     setRegisterAnalysisResult(null);
+    setTopicSegments(null); // Clear topic segments when a new video is processed
     setFile(null);
     setVideoError(false);
 
@@ -505,10 +517,25 @@ export default function App() {
                 </div>
               )}
 
+              {/* Placeholder for Topic Segments - to be implemented if needed */}
+              {/* {topicSegments && topicSegments.length > 0 && (
+                <div className="topicSegmentsOutputSection" style={{ marginTop: '20px' }}>
+                  <h4>Topic Segments:</h4>
+                  <ul>
+                    {topicSegments.map((segment, index) => (
+                      <li key={index}>
+                        <strong>{segment.startTime} - {segment.endTime}:</strong> {segment.topicDescription}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )} */}
+
               {/* Fallback message if no data loaded and not loading */}
               {!isLoading && 
                (!timecodeList || timecodeList.length === 0) && 
                (!registerAnalysisResult || Object.keys(registerAnalysisResult).length === 0) && 
+               (!topicSegments || topicSegments.length === 0) && // Include topicSegments in condition
                vidUrl && file && activeMode && (
                 <p>No annotations or analysis generated for this mode yet, or the model didn't return any.</p>
               )}
