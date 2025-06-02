@@ -9,7 +9,7 @@ import {FunctionDeclaration, GoogleGenAI, Type} from '@google/genai';
 const systemInstruction = `You are an AI assistant that analyzes video content. You MUST use the provided function calling tools to respond. Do NOT output any text, explanations, or markdown code blocks (e.g., \`\`\`python ... \`\`\`). Your entire response must be through function calls. If the user query can be addressed by a function, call it. Adhere strictly to the function's parameter schema.`;
 
 // Use process.env.API_KEY as per guidelines
-const client = new GoogleGenAI({apiKey: process.env.API_KEY});
+const client = new GoogleGenAI({apiKey: import.meta.env.VITE_GEMINI_API_KEY});
 
 async function generateContent(
   text: string,
@@ -54,6 +54,9 @@ async function uploadFile(file: File) {
   });
   console.log('Uploaded.');
   console.log('Getting file metadata...');
+if (typeof uploadedFile.name !== 'string') {
+    throw new Error('Uploaded file name is undefined or not a string.');
+  }
   let getFile = await client.files.get({
     name: uploadedFile.name,
   });
@@ -68,6 +71,11 @@ async function uploadFile(file: File) {
     await new Promise((resolve) => {
       setTimeout(resolve, delay);
     });
+if (typeof uploadedFile.name !== 'string') {
+      // This check might be redundant if the first one passes and uploadedFile.name is const,
+      // but it's safe to keep, especially if the object could be mutated.
+      throw new Error('Uploaded file name is undefined or not a string during retry.');
+    }
     getFile = await client.files.get({
       name: uploadedFile.name,
     });

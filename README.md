@@ -30,6 +30,7 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
 - **🤓 Table**: Identifies 5 key shots with descriptions and visible objects
 - **🌸 Haiku**: Creates a poetic haiku based on the video content
 - **📈 Chart**: Generates data visualizations (excitement levels, people count, etc.)
+- **🧩 Topic Segmentation**: Identifies distinct conceptual and thematic segments in the video.
 - **🔧 Custom**: Analyze videos with your own custom prompts
 
 ### Key Features
@@ -75,7 +76,7 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
    - In the project folder, create a new file named `.env`
    - Add this line (replace with your actual key):
 
-   ```
+   ```shell
    GEMINI_API_KEY=AIzaSyYourActualKeyHere
    ```
 
@@ -153,6 +154,7 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
    - **Table**: Best for visual analysis of scenes
    - **Haiku**: Best for creative/artistic interpretation
    - **Chart**: Best for data visualization
+   - **Topic Segmentation**: Best for breaking down videos into topical sections
    - **Custom**: Best for specific questions
 
 2. Click on your desired mode
