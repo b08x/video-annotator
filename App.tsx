@@ -220,45 +220,71 @@ export default function App() {
 
 
   const handleExport = () => {
-    if (!timecodeList || timecodeList.length === 0 || !file || !file.name) {
-      alert("No VTT-compatible annotations or video file details available to export. Please ensure a video is processed and has a valid file name.");
+    let vttContent = "WEBVTT\n\n";
+
+    if (!file || !file.name) {
+      alert("No video file details available to export. Please ensure a video is processed and has a valid file name.");
       return;
     }
+    const videoFileName = file.name;
 
-    const videoFileName = file.name; 
+    let dataAvailableToExport = false;
 
-    let vttContent = "WEBVTT\n\n";
-    timecodeList.forEach((item, index) => {
-      const startTimeSecs = timeToSecs(item.time);
-      let endTimeSecs;
+    if (activeMode === 'Topic Segmentation' && topicSegments && topicSegments.length > 0) {
+      dataAvailableToExport = true;
+      topicSegments.forEach((segment, index) => {
+        const startTimeSecs = timeToSecs(segment.startTime);
+        let endTimeSecs = timeToSecs(segment.endTime);
 
-      if (index < timecodeList.length - 1) {
-        endTimeSecs = timeToSecs(timecodeList[index + 1].time);
-        if (endTimeSecs <= startTimeSecs) { 
-          endTimeSecs = startTimeSecs + 0.5; 
+        if (endTimeSecs <= startTimeSecs) {
+          endTimeSecs = startTimeSecs + 0.5; // Ensure end time is after start time
         }
-      } else {
-        const videoDuration = videoRef.current?.duration;
-        if (videoDuration && startTimeSecs < videoDuration) {
-           endTimeSecs = Math.min(startTimeSecs + 5, videoDuration);
+        const captionText = segment.topicDescription.replace(/\n/g, ' ');
+        
+        vttContent += `${index + 1}\n`;
+        vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
+        vttContent += `${captionText}\n\n`;
+      });
+    } else if (timecodeList && timecodeList.length > 0) {
+      dataAvailableToExport = true;
+      // ... existing logic for timecodeList ...
+      timecodeList.forEach((item, index) => {
+        const startTimeSecs = timeToSecs(item.time);
+        let endTimeSecs;
+
+        if (index < timecodeList.length - 1) {
+          endTimeSecs = timeToSecs(timecodeList[index + 1].time);
+          if (endTimeSecs <= startTimeSecs) { 
+            endTimeSecs = startTimeSecs + 0.5; 
+          }
         } else {
-           endTimeSecs = startTimeSecs + 5;
+          const videoDuration = videoRef.current?.duration;
+          if (videoDuration && startTimeSecs < videoDuration) {
+            endTimeSecs = Math.min(startTimeSecs + 5, videoDuration); // Default duration for last caption
+          } else {
+            endTimeSecs = startTimeSecs + 5; // Fallback if duration is not available or start time is beyond
+          }
         }
-      }
 
-      const captionText = item.value !== undefined ? String(item.value) : (item.text || "");
-      
-      vttContent += `${index + 1}\n`; 
-      vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
-      vttContent += `${captionText.replace(/\n/g, ' ')}\n\n`;
-    });
+        const captionText = item.value !== undefined ? String(item.value) : (item.text || "");
+        
+        vttContent += `${index + 1}\n`; 
+        vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
+        vttContent += `${captionText.replace(/\n/g, ' ')}\n\n`;
+      });
+    }
+
+    if (!dataAvailableToExport) {
+      alert("No annotations available to export for the current mode.");
+      return;
+    }
     
     const blob = new Blob([vttContent], { type: 'text/vtt' });
     const anchor = document.createElement('a');
     anchor.href = URL.createObjectURL(blob);
     
     const safeDisplayName = videoFileName.replace(/[^a-z0-9_.-]/gi, '_').split('.')[0];
-    anchor.download = `${safeDisplayName}_annotations.vtt`;
+    anchor.download = `${safeDisplayName}_${activeMode === 'Topic Segmentation' ? 'segments' : 'annotations'}.vtt`;
     
     document.body.appendChild(anchor);
     anchor.click();
@@ -473,7 +499,7 @@ export default function App() {
                       yLabel={isCustomChartMode ? chartLabel : modes.Chart.subModes?.[chartMode] || chartLabel}
                       jumpToTimecode={setRequestedTimecode}
                     />
-                  ) : currentActiveModeConfig?.isList ? (
+                  ) : currentActiveModeConfig?.isList && activeMode !== 'Topic Segmentation' ? ( // Exclude Topic Segmentation here if handled separately
                     <ul>
                       {timecodeList.map(({time, text}, i) => (
                         <li key={i} className="outputItem">
@@ -487,7 +513,8 @@ export default function App() {
                         </li>
                       ))}
                     </ul>
-                  ) : (
+                  ) : ( // Default rendering for non-list, or if Topic Segmentation doesn't use this block
+                    !currentActiveModeConfig?.isRegisterType && activeMode !== 'Topic Segmentation' &&
                     timecodeList.map(({time, text}, i) => (
                       text ? <span
                         key={i}
@@ -503,11 +530,11 @@ export default function App() {
                       </span> : null
                     ))
                   )}
-                  {file && (
+                  {file && (activeMode !== 'Topic Segmentation' || (topicSegments && topicSegments.length > 0)) && ( // Show export if relevant data exists
                     <button
                       className="button exportButton"
                       onClick={handleExport}
-                      disabled={!file.name}
+                      disabled={!file.name || (!timecodeList && !topicSegments)}
                       aria-label="Export annotations as VTT file"
                     >
                       <span className="icon" aria-hidden="true">download</span>
@@ -519,19 +546,19 @@ export default function App() {
 
               {/* Section for Register Analysis JSON output */}
               {currentActiveModeConfig?.isRegisterType && registerAnalysisResult && (
-                <div className="registerOutputSection" style={{ marginTop: (timecodeList && timecodeList.length > 0) ? '20px' : '0' }}>
+                <div className="registerOutputSection" style={{ marginTop: (timecodeList && timecodeList.length > 0 && activeMode !== 'Topic Segmentation') ? '20px' : '0' }}>
                   <h4>{activeMode} - Structured Analysis:</h4>
                   <pre className="jsonOutput">{JSON.stringify(registerAnalysisResult, null, 2)}</pre>
                 </div>
               )}
 
               {/* Display Topic Segments */}
-              {topicSegments && topicSegments.length > 0 && (
-                <div className="topicSegmentsOutputSection" style={{ marginTop: '20px' }}>
-                  <h4>Topic Segments:</h4>
+              {activeMode === 'Topic Segmentation' && topicSegments && topicSegments.length > 0 && (
+                <div className="topicSegmentsOutputSection" style={{ marginTop: '0px' }}> {/* Adjusted margin if it's the primary output */}
+                  {/* <h4>Topic Segments:</h4> // Optional: Title could be implicit from mode selection */}
                   <ul>
                     {topicSegments.map((segment, index) => (
-                      <li key={index} className="outputItem"> {/* Using outputItem for similar styling */}
+                      <li key={index} className="outputItem">
                         <button 
                           onClick={() => setRequestedTimecode(timeToSecs(segment.startTime))}
                           aria-label={`Jump to topic segment starting at ${segment.startTime}: ${segment.topicDescription}`}
@@ -544,6 +571,17 @@ export default function App() {
                       </li>
                     ))}
                   </ul>
+                  {file && (
+                     <button
+                       className="button exportButton"
+                       onClick={handleExport}
+                       disabled={!file.name}
+                       aria-label="Export topic segments as VTT file"
+                     >
+                       <span className="icon" aria-hidden="true">download</span>
+                       Export VTT File
+                     </button>
+                   )}
                 </div>
               )}
 
@@ -551,7 +589,7 @@ export default function App() {
               {!isLoading && 
                (!timecodeList || timecodeList.length === 0) && 
                (!registerAnalysisResult || Object.keys(registerAnalysisResult).length === 0) && 
-               (!topicSegments || topicSegments.length === 0) && // Include topicSegments in condition
+               (!topicSegments || topicSegments.length === 0) && 
                vidUrl && file && activeMode && (
                 <p>No annotations or analysis generated for this mode yet, or the model didn't return any.</p>
               )}
