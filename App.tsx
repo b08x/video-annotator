@@ -108,6 +108,14 @@ export default function App() {
     setRegisterAnalysisResult(analysisResult);
   };
 
+  const handleSetTopicSegments = ({ segments }: { segments: TopicSegment[] }) => {
+    const processedSegments = segments.map(segment => ({
+      ...segment,
+      topicDescription: segment.topicDescription.replace(/\\'/g, "'"),
+    }));
+    setTopicSegments(processedSegments);
+  };
+
   const onModeSelect = async (mode: string) => {
     if (!file) return; // Ensure file is uploaded before generating
     setActiveMode(mode);
@@ -137,7 +145,7 @@ export default function App() {
         set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
           setTimecodeList(timecodes),
         set_register_analysis_result: setRegisterResult,
-        // Potentially add a new function callback here for setting topic segments if API provides them
+        set_topic_segments: handleSetTopicSegments, // Add new callback for HOF
       }),
       { uri: file.uri, mimeType: file.apiMimeType },
     );
@@ -149,7 +157,7 @@ export default function App() {
         set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
           setTimecodeList(timecodes),
         set_register_analysis_result: setRegisterResult,
-         // Potentially map the new function call here
+        set_topic_segments: handleSetTopicSegments, // Add new callback for execution
       };
       for (const call of resp.functionCalls) {
         if (fnMap[call.name as keyof typeof fnMap]) {
@@ -517,19 +525,27 @@ export default function App() {
                 </div>
               )}
 
-              {/* Placeholder for Topic Segments - to be implemented if needed */}
-              {/* {topicSegments && topicSegments.length > 0 && (
+              {/* Display Topic Segments */}
+              {topicSegments && topicSegments.length > 0 && (
                 <div className="topicSegmentsOutputSection" style={{ marginTop: '20px' }}>
                   <h4>Topic Segments:</h4>
                   <ul>
                     {topicSegments.map((segment, index) => (
-                      <li key={index}>
-                        <strong>{segment.startTime} - {segment.endTime}:</strong> {segment.topicDescription}
+                      <li key={index} className="outputItem"> {/* Using outputItem for similar styling */}
+                        <button 
+                          onClick={() => setRequestedTimecode(timeToSecs(segment.startTime))}
+                          aria-label={`Jump to topic segment starting at ${segment.startTime}: ${segment.topicDescription}`}
+                        >
+                          <time dateTime={segment.startTime}>{segment.startTime}</time>
+                          <span> - </span>
+                          <time dateTime={segment.endTime}>{segment.endTime}</time>
+                          <p className="text" style={{ marginLeft: '10px' }}>{segment.topicDescription}</p>
+                        </button>
                       </li>
                     ))}
                   </ul>
                 </div>
-              )} */}
+              )}
 
               {/* Fallback message if no data loaded and not loading */}
               {!isLoading && 
