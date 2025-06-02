@@ -60,7 +60,7 @@ async function uploadFile(file: File) {
 
   // Implement exponential backoff for retries
   let retries = 0;
-  const maxRetries = 5;
+  const maxRetries = 10; // Increased from 5 to 10
   let delay = 1000; // Initial delay 1 second
 
   while (getFile.state === 'PROCESSING' && retries < maxRetries) {
