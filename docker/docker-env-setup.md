@@ -1,6 +1,7 @@
 # Docker Setup for Video Analyzer
 
 ## Prerequisites
+
 - Docker and Docker Compose installed on your system
 - A Google Gemini API key
 
@@ -19,11 +20,13 @@ GEMINI_API_KEY=your_actual_gemini_api_key_here
 #### Production Build
 
 Build the Docker image:
+
 ```bash
 docker-compose build
 ```
 
 Run the production container:
+
 ```bash
 docker-compose up -d
 ```
@@ -33,6 +36,7 @@ The application will be available at `http://localhost:3000`
 #### Development Mode
 
 Run the development container:
+
 ```bash
 docker-compose --profile dev up video-analyzer-dev
 ```
@@ -42,16 +46,19 @@ The development server will be available at `http://localhost:5173`
 ### 3. Managing the Application
 
 Stop the container:
+
 ```bash
 docker-compose down
 ```
 
 View logs:
+
 ```bash
 docker-compose logs -f
 ```
 
 Rebuild after code changes:
+
 ```bash
 docker-compose build --no-cache
 ```
@@ -59,11 +66,13 @@ docker-compose build --no-cache
 ### 4. Alternative: Using Docker directly (without docker-compose)
 
 Build the image:
+
 ```bash
 docker build -t video-analyzer .
 ```
 
 Run the container:
+
 ```bash
 docker run -d -p 3000:80 --name video-analyzer-app video-analyzer
 ```
@@ -71,9 +80,11 @@ docker run -d -p 3000:80 --name video-analyzer-app video-analyzer
 ### 5. API Key Handling Options
 
 #### Option A: Build-time injection (current setup)
+
 The API key is baked into the build. This is simpler but less secure.
 
 #### Option B: Runtime injection (recommended for production)
+
 Modify the Vite config to use runtime environment variables:
 
 1. Update `vite.config.ts` to handle runtime variables
@@ -81,6 +92,7 @@ Modify the Vite config to use runtime environment variables:
 3. Modify the Dockerfile to use the entrypoint
 
 Example entrypoint script (`docker-entrypoint.sh`):
+
 ```bash
 #!/bin/sh
 # Replace placeholder with actual API key
@@ -112,6 +124,7 @@ services:
 ### 7. Troubleshooting
 
 If the container fails to start:
+
 - Check logs: `docker-compose logs`
 - Verify the API key is correctly set
 - Ensure ports 3000 (or 5173 for dev) are not in use

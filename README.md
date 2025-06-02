@@ -30,6 +30,7 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
 - **🤓 Table**: Identifies 5 key shots with descriptions and visible objects
 - **🌸 Haiku**: Creates a poetic haiku based on the video content
 - **📈 Chart**: Generates data visualizations (excitement levels, people count, etc.)
+- **🧩 Topic Segmentation**: Identifies distinct conceptual and thematic segments in the video.
 - **🔧 Custom**: Analyze videos with your own custom prompts
 
 ### Key Features
@@ -75,14 +76,14 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
    - In the project folder, create a new file named `.env`
    - Add this line (replace with your actual key):
 
-   ```
+   ```shell
    GEMINI_API_KEY=AIzaSyYourActualKeyHere
    ```
 
 4. **Build the Docker image**
 
    ```bash
-   docker-compose build
+   make build
    ```
 
    This will take 2-5 minutes the first time.
@@ -90,7 +91,7 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
 5. **Start the application**
 
    ```bash
-   docker-compose up -d
+   make run
    ```
 
 6. **Open your browser**
@@ -112,7 +113,7 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
    - In the project folder, create a new file named `.env.local`
    - Add this line:
 
-   ```
+   ```shell
    GEMINI_API_KEY=AIzaSyYourActualKeyHere
    ```
 
@@ -153,6 +154,7 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
    - **Table**: Best for visual analysis of scenes
    - **Haiku**: Best for creative/artistic interpretation
    - **Chart**: Best for data visualization
+   - **Topic Segmentation**: Best for breaking down videos into topical sections
    - **Custom**: Best for specific questions
 
 2. Click on your desired mode
@@ -201,7 +203,7 @@ This is a web application that uses Google's Gemini AI to analyze videos. You dr
 
 ## Project Structure
 
-```
+```bash
 video-analyzer/
 ├── App.tsx              # Main application component
 ├── VideoPlayer.tsx      # Video player with controls
@@ -261,20 +263,34 @@ video-analyzer/
 
 ## Common Commands
 
-### Docker Commands
+### Makefile Commands
+
+The Makefile provides convenient shortcuts for common Docker operations:
 
 ```bash
-# Start the application
-docker-compose up -d
+# Show available commands and their descriptions
+make help
 
-# Stop the application
-docker-compose down
+# Build the Docker image
+make build
 
-# View logs
-docker-compose logs -f
+# Run the container in production mode (detached)
+make run
 
-# Rebuild after code changes
-docker-compose build --no-cache
+# Run the container in development mode
+make dev
+
+# Stop all running containers managed by docker-compose
+make stop
+
+# Stop containers and remove associated images and volumes
+make clean
+
+# View container logs (follows new output)
+make logs
+
+# Open a shell in the running 'video-analyzer' container
+make shell
 ```
 
 ### Development Commands
