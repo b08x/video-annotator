@@ -236,8 +236,8 @@ For each identified segment, determine a precise start time and end time (in HH:
 Also, provide a concise (1-2 sentences) textual description that clearly summarizes the main topic of that segment.
 Consider all available information in the video, including spoken words, visual elements, on-screen text, and overall narrative flow to make your segmentation decisions.
 The segments should be sequential and cover the main parts of the video. Aim for segments that are neither too short (trivial) nor too long (covering multiple distinct topics).
-Use the 'set_topic_segments' function to return all identified segments.`,
-    isList: true, // Though not strictly a list output like A/V captions, this ensures the UI can handle it similarly if needed, or it can be ignored if display logic for topic segments is distinct.
+Use the 'set_topic_segments' function to return all identified segments. Your response MUST be a call to the 'set_topic_segments' function. Do not wrap your response in any markdown formatting or code blocks.`,
+    isList: true,
   },
 
   'Segment Summary': {

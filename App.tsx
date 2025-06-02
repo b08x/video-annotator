@@ -116,6 +116,30 @@ export default function App() {
     setTopicSegments(processedSegments);
   };
 
+  // Define the map for Gemini function callbacks
+  const fnMapForGemini = {
+    set_timecodes: (args: { timecodes: Timecode[] }) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes with args:`, JSON.stringify(args, null, 2));
+        setTimecodes(args);
+    },
+    set_timecodes_with_objects: (args: { timecodes: Timecode[] }) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes_with_objects with args:`, JSON.stringify(args, null, 2));
+        setTimecodes(args);
+    },
+    set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes_with_numeric_values with args:`, JSON.stringify({timecodes}, null, 2));
+        setTimecodeList(timecodes);
+    },
+    set_register_analysis_result: (args: { analysisResult: object }) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_register_analysis_result with args:`, JSON.stringify(args, null, 2));
+        setRegisterResult(args);
+    },
+    set_topic_segments: (args: { segments: TopicSegment[] }) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_topic_segments with args:`, JSON.stringify(args, null, 2));
+        handleSetTopicSegments(args);
+    },
+  };
+
   const onModeSelect = async (mode: string) => {
     if (!file) {
       console.warn(`[${new Date().toISOString()}] 'onModeSelect' called for mode '${mode}' but no file is loaded. Aborting.`);
@@ -146,29 +170,6 @@ export default function App() {
     console.log(`[${new Date().toISOString()}] Full prompt for API (first 200 chars): ${promptValue.substring(0, 200)}${promptValue.length > 200 ? '...' : ''}`);
 
     try {
-      const fnMapForGemini = {
-        set_timecodes: (args: { timecodes: Timecode[] }) => {
-            console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes with args:`, JSON.stringify(args, null, 2));
-            setTimecodes(args);
-        },
-        set_timecodes_with_objects: (args: { timecodes: Timecode[] }) => {
-            console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes_with_objects with args:`, JSON.stringify(args, null, 2));
-            setTimecodes(args);
-        },
-        set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) => {
-            console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes_with_numeric_values with args:`, JSON.stringify({timecodes}, null, 2));
-            setTimecodeList(timecodes);
-        },
-        set_register_analysis_result: (args: { analysisResult: object }) => {
-            console.log(`[${new Date().toISOString()}] Gemini called: set_register_analysis_result with args:`, JSON.stringify(args, null, 2));
-            setRegisterResult(args);
-        },
-        set_topic_segments: (args: { segments: TopicSegment[] }) => {
-            console.log(`[${new Date().toISOString()}] Gemini called: set_topic_segments with args:`, JSON.stringify(args, null, 2));
-            handleSetTopicSegments(args);
-        },
-      };
-
       const resp = await generateContent(
         promptValue,
         functions(fnMapForGemini), 
@@ -176,14 +177,49 @@ export default function App() {
       );
 
       console.log(`[${new Date().toISOString()}] API Response for mode ${mode}:`, JSON.stringify(resp, null, 2));
+      
+      let functionCalledBySDK = false;
+      // Check if any of our logging inside callbacks was triggered
+      // This is a bit of a hack; ideally, the SDK would provide a more direct way to know.
+      // For this check, we'll assume if a state that is set by a callback is populated, it was called.
+      // This is imperfect because state might be set then cleared by this same onModeSelect run.
+      // A more robust check would be to have callbacks set a temporary flag.
+      // For now, we rely on the manual loop as a fallback.
 
-      if (!resp.functionCalls || resp.functionCalls.length === 0) {
-        console.warn(`[${new Date().toISOString()}] API response for mode ${mode} did not include any function calls from the model.`);
-        // Check if there's direct text output instead
-        if (resp.text && resp.text.trim() !== '') {
-           console.warn(`[${new Date().toISOString()}] Model returned direct text output instead of function call for mode ${mode}: "${resp.text.substring(0, 200)}${resp.text.length > 200 ? '...' : ''}"`);
+      // Manual function call execution if SDK didn't (or if we want to be certain)
+      // This is useful if the SDK's automatic callback execution is missed for some reason.
+      if (resp.functionCalls && resp.functionCalls.length > 0) {
+        console.log(`[${new Date().toISOString()}] Inspecting ${resp.functionCalls.length} function call(s) from API response.`);
+        let manuallyCalledCount = 0;
+        for (const funcCall of resp.functionCalls) {
+          const callbackToExecute = fnMapForGemini[funcCall.name as keyof typeof fnMapForGemini];
+          if (callbackToExecute) {
+            // Check if the specific log for this callback has already appeared (implies SDK ran it)
+            // This is a proxy, real check would need more complex state.
+            // For simplicity, we'll just call it, assuming callbacks are idempotent or safe to recall.
+            // Or, better, rely on the console logs to see if "Gemini called: <functionName>" appeared before this manual loop.
+            console.log(`[${new Date().toISOString()}] Manually executing function from API response: ${funcCall.name}`);
+            try {
+                // Cast args to `any` to satisfy the diverse signatures, specific callbacks will handle their expected types.
+                (callbackToExecute as (args: any) => void)(funcCall.args);
+                manuallyCalledCount++;
+            } catch (manualExecError) {
+              console.error(`[${new Date().toISOString()}] Error during manual execution of ${funcCall.name}:`, manualExecError);
+            }
+          } else {
+            console.warn(`[${new Date().toISOString()}] No callback found in fnMapForGemini for function call: ${funcCall.name}`);
+          }
         }
+        if (manuallyCalledCount > 0) {
+            console.log(`[${new Date().toISOString()}] Manually executed ${manuallyCalledCount} function(s).`);
+        }
+      } else { // This 'else' corresponds to the 'if (resp.functionCalls && resp.functionCalls.length > 0)'
+          console.warn(`[${new Date().toISOString()}] API response for mode ${mode} did not include any function calls list from the model.`);
+          if (resp.text && resp.text.trim() !== '') {
+             console.warn(`[${new Date().toISOString()}] Model returned direct text output instead of function call for mode ${mode}: "${resp.text.substring(0, 200)}${resp.text.length > 200 ? '...' : ''}"`);
+          }
       }
+
 
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Error during 'onModeSelect' for mode ${mode}:`, error);
