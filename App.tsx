@@ -117,13 +117,16 @@ export default function App() {
   };
 
   const onModeSelect = async (mode: string) => {
-    if (!file) return; // Ensure file is uploaded before generating
+    if (!file) {
+      console.warn(`[${new Date().toISOString()}] 'onModeSelect' called for mode '${mode}' but no file is loaded. Aborting.`);
+      return;
+    }
     setActiveMode(mode);
     setIsLoading(true);
     setChartLabel(chartPrompt);
-    setTimecodeList(null); // Clear previous results
-    setRegisterAnalysisResult(null); // Clear previous register results
-    setTopicSegments(null); // Clear previous topic segments
+    setTimecodeList(null); 
+    setRegisterAnalysisResult(null);
+    setTopicSegments(null); 
 
     const currentModeConfig = modes[mode as keyof typeof modes];
     let promptValue: string;
@@ -137,39 +140,57 @@ export default function App() {
         promptValue = currentModeConfig.prompt as string;
     }
 
-    const resp = await generateContent(
-      promptValue,
-      functions({
-        set_timecodes: setTimecodes,
-        set_timecodes_with_objects: setTimecodes,
-        set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
-          setTimecodeList(timecodes),
-        set_register_analysis_result: setRegisterResult,
-        set_topic_segments: handleSetTopicSegments, // Add new callback for HOF
-      }),
-      { uri: file.uri, mimeType: file.apiMimeType },
-    );
+    console.log(`[${new Date().toISOString()}] Activating mode: ${mode}.`);
+    if (isCustomMode) console.log(`[${new Date().toISOString()}] Custom prompt: ${customPrompt.substring(0,150)}...`);
+    if (isChartMode) console.log(`[${new Date().toISOString()}] Chart mode selected: ${chartMode}. Custom chart prompt: ${isCustomChartMode ? chartPrompt.substring(0,150)+'...' : 'N/A'}`);
+    console.log(`[${new Date().toISOString()}] Full prompt for API (first 200 chars): ${promptValue.substring(0, 200)}${promptValue.length > 200 ? '...' : ''}`);
 
-    if (resp.functionCalls && resp.functionCalls.length > 0) {
-      const fnMap = {
-        set_timecodes: setTimecodes,
-        set_timecodes_with_objects: setTimecodes,
-        set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
-          setTimecodeList(timecodes),
-        set_register_analysis_result: setRegisterResult,
-        set_topic_segments: handleSetTopicSegments, // Add new callback for execution
+    try {
+      const fnMapForGemini = {
+        set_timecodes: (args: { timecodes: Timecode[] }) => {
+            console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes with args:`, JSON.stringify(args, null, 2));
+            setTimecodes(args);
+        },
+        set_timecodes_with_objects: (args: { timecodes: Timecode[] }) => {
+            console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes_with_objects with args:`, JSON.stringify(args, null, 2));
+            setTimecodes(args);
+        },
+        set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) => {
+            console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes_with_numeric_values with args:`, JSON.stringify({timecodes}, null, 2));
+            setTimecodeList(timecodes);
+        },
+        set_register_analysis_result: (args: { analysisResult: object }) => {
+            console.log(`[${new Date().toISOString()}] Gemini called: set_register_analysis_result with args:`, JSON.stringify(args, null, 2));
+            setRegisterResult(args);
+        },
+        set_topic_segments: (args: { segments: TopicSegment[] }) => {
+            console.log(`[${new Date().toISOString()}] Gemini called: set_topic_segments with args:`, JSON.stringify(args, null, 2));
+            handleSetTopicSegments(args);
+        },
       };
-      for (const call of resp.functionCalls) {
-        if (fnMap[call.name as keyof typeof fnMap]) {
-          (fnMap as any)[call.name](call.args);
-        } else {
-          console.warn(`Unknown function call in response: ${call.name}`);
+
+      const resp = await generateContent(
+        promptValue,
+        functions(fnMapForGemini), 
+        { uri: file.uri, mimeType: file.apiMimeType },
+      );
+
+      console.log(`[${new Date().toISOString()}] API Response for mode ${mode}:`, JSON.stringify(resp, null, 2));
+
+      if (!resp.functionCalls || resp.functionCalls.length === 0) {
+        console.warn(`[${new Date().toISOString()}] API response for mode ${mode} did not include any function calls from the model.`);
+        // Check if there's direct text output instead
+        if (resp.text && resp.text.trim() !== '') {
+           console.warn(`[${new Date().toISOString()}] Model returned direct text output instead of function call for mode ${mode}: "${resp.text.substring(0, 200)}${resp.text.length > 200 ? '...' : ''}"`);
         }
       }
-    }
 
-    setIsLoading(false);
-    scrollRef.current?.scrollTo({top: 0, behavior: 'smooth'});
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error during 'onModeSelect' for mode ${mode}:`, error);
+    } finally {
+      setIsLoading(false);
+      scrollRef.current?.scrollTo({top: 0, behavior: 'smooth'});
+    }
   };
 
   const processAndSetFile = async (clientUploadedFile: File | null) => {
@@ -179,11 +200,14 @@ export default function App() {
     setVidUrl(URL.createObjectURL(clientUploadedFile));
     setTimecodeList(null);
     setRegisterAnalysisResult(null);
-    setTopicSegments(null); // Clear topic segments when a new video is processed
+    setTopicSegments(null); 
     setFile(null);
     setVideoError(false);
+    setActiveMode(undefined); 
+
 
     try {
+      console.log(`[${new Date().toISOString()}] Processing file: ${clientUploadedFile.name}`);
       const res = await uploadFileToApi(clientUploadedFile);
       setFile({
         displayName: res.displayName || clientUploadedFile.name,
@@ -192,9 +216,10 @@ export default function App() {
         uri: res.uri,
         name: clientUploadedFile.name,
       });
+      console.log(`[${new Date().toISOString()}] File processed successfully: ${res.displayName}`);
       setIsLoadingVideo(false);
     } catch (err) {
-      console.error('Error processing file:', err);
+      console.error(`[${new Date().toISOString()}] Error processing file ${clientUploadedFile.name}:`, err);
       setVideoError(true);
       setIsLoadingVideo(false);
     }
@@ -203,13 +228,15 @@ export default function App() {
   const handleDragUpload = async (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files[0];
+    console.log(`[${new Date().toISOString()}] File dragged and dropped: ${droppedFile?.name}`);
     processAndSetFile(droppedFile);
   };
 
   const handleFileSelectedChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files ? event.target.files[0] : null;
+    console.log(`[${new Date().toISOString()}] File selected via input: ${selectedFile?.name}`);
     processAndSetFile(selectedFile);
-    if (event.target) { // Clear input value to allow re-selecting the same file
+    if (event.target) { 
       event.target.value = '';
     }
   };
@@ -224,6 +251,7 @@ export default function App() {
 
     if (!file || !file.name) {
       alert("No video file details available to export. Please ensure a video is processed and has a valid file name.");
+      console.warn(`[${new Date().toISOString()}] Export called but no file details available.`);
       return;
     }
     const videoFileName = file.name;
@@ -237,7 +265,7 @@ export default function App() {
         let endTimeSecs = timeToSecs(segment.endTime);
 
         if (endTimeSecs <= startTimeSecs) {
-          endTimeSecs = startTimeSecs + 0.5; // Ensure end time is after start time
+          endTimeSecs = startTimeSecs + 0.5; 
         }
         const captionText = segment.topicDescription.replace(/\n/g, ' ');
         
@@ -245,9 +273,9 @@ export default function App() {
         vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
         vttContent += `${captionText}\n\n`;
       });
+      console.log(`[${new Date().toISOString()}] Exporting ${topicSegments.length} topic segments.`);
     } else if (timecodeList && timecodeList.length > 0) {
       dataAvailableToExport = true;
-      // ... existing logic for timecodeList ...
       timecodeList.forEach((item, index) => {
         const startTimeSecs = timeToSecs(item.time);
         let endTimeSecs;
@@ -260,9 +288,9 @@ export default function App() {
         } else {
           const videoDuration = videoRef.current?.duration;
           if (videoDuration && startTimeSecs < videoDuration) {
-            endTimeSecs = Math.min(startTimeSecs + 5, videoDuration); // Default duration for last caption
+            endTimeSecs = Math.min(startTimeSecs + 5, videoDuration); 
           } else {
-            endTimeSecs = startTimeSecs + 5; // Fallback if duration is not available or start time is beyond
+            endTimeSecs = startTimeSecs + 5; 
           }
         }
 
@@ -272,10 +300,12 @@ export default function App() {
         vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
         vttContent += `${captionText.replace(/\n/g, ' ')}\n\n`;
       });
+      console.log(`[${new Date().toISOString()}] Exporting ${timecodeList.length} timecode items.`);
     }
 
     if (!dataAvailableToExport) {
       alert("No annotations available to export for the current mode.");
+      console.warn(`[${new Date().toISOString()}] Export called, but no data available for activeMode: ${activeMode}.`);
       return;
     }
     
@@ -290,6 +320,7 @@ export default function App() {
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(anchor.href);
+    console.log(`[${new Date().toISOString()}] VTT file exported: ${anchor.download}`);
   };
   
   const currentActiveModeConfig = activeMode ? modes[activeMode as keyof typeof modes] : undefined;
@@ -446,7 +477,7 @@ export default function App() {
           isLoadingVideo={isLoadingVideo}
           videoError={videoError}
           videoRef={videoRef}
-          onUploadButtonClick={handleUploadButtonClick} // Pass handler to VideoPlayer
+          onUploadButtonClick={handleUploadButtonClick} 
         />
       </section>
 
@@ -499,7 +530,7 @@ export default function App() {
                       yLabel={isCustomChartMode ? chartLabel : modes.Chart.subModes?.[chartMode] || chartLabel}
                       jumpToTimecode={setRequestedTimecode}
                     />
-                  ) : currentActiveModeConfig?.isList && activeMode !== 'Topic Segmentation' ? ( // Exclude Topic Segmentation here if handled separately
+                  ) : currentActiveModeConfig?.isList && activeMode !== 'Topic Segmentation' ? ( 
                     <ul>
                       {timecodeList.map(({time, text}, i) => (
                         <li key={i} className="outputItem">
@@ -513,7 +544,7 @@ export default function App() {
                         </li>
                       ))}
                     </ul>
-                  ) : ( // Default rendering for non-list, or if Topic Segmentation doesn't use this block
+                  ) : ( 
                     !currentActiveModeConfig?.isRegisterType && activeMode !== 'Topic Segmentation' &&
                     timecodeList.map(({time, text}, i) => (
                       text ? <span
@@ -530,11 +561,12 @@ export default function App() {
                       </span> : null
                     ))
                   )}
-                  {file && (activeMode !== 'Topic Segmentation' || (topicSegments && topicSegments.length > 0)) && ( // Show export if relevant data exists
+                  {/* Generic Export Button: Show if file exists, activeMode is NOT Topic Segmentation, and timecodeList has data */}
+                  {file && activeMode !== 'Topic Segmentation' && timecodeList && timecodeList.length > 0 && (
                     <button
                       className="button exportButton"
                       onClick={handleExport}
-                      disabled={!file.name || (!timecodeList && !topicSegments)}
+                      disabled={!file.name}
                       aria-label="Export annotations as VTT file"
                     >
                       <span className="icon" aria-hidden="true">download</span>
@@ -554,8 +586,7 @@ export default function App() {
 
               {/* Display Topic Segments */}
               {activeMode === 'Topic Segmentation' && topicSegments && topicSegments.length > 0 && (
-                <div className="topicSegmentsOutputSection" style={{ marginTop: '0px' }}> {/* Adjusted margin if it's the primary output */}
-                  {/* <h4>Topic Segments:</h4> // Optional: Title could be implicit from mode selection */}
+                <div className="topicSegmentsOutputSection" style={{ marginTop: '0px' }}> 
                   <ul>
                     {topicSegments.map((segment, index) => (
                       <li key={index} className="outputItem">
@@ -571,6 +602,7 @@ export default function App() {
                       </li>
                     ))}
                   </ul>
+                  {/* Topic Segmentation Specific Export Button */}
                   {file && (
                      <button
                        className="button exportButton"
