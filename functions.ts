@@ -102,6 +102,54 @@ const functions: FunctionDeclaration[] = [
       required: ['timecodes'],
     },
   },
+  {
+    name: 'set_register_analysis_result',
+    description: 'Set the analysis result from a register-based prompt as a JSON object.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        analysisResult: {
+          type: Type.OBJECT,
+          description: "The JSON object containing the analysis. Structure depends on the specific register prompt used."
+          // Properties are not strictly defined here to allow flexibility for different register JSON structures
+        }
+      },
+      required: ['analysisResult'],
+    },
+  },
+  {
+    name: 'set_topic_segments',
+    description: "Sets the identified topic segments for the video. Each segment includes a start time, an end time, and a textual description of the topic discussed or shown during that segment.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        segments: {
+          type: Type.ARRAY,
+          description: "An array of topic segments identified in the video.",
+          items: {
+            type: Type.OBJECT,
+            description: "A single topic segment with its time boundaries and description.",
+            properties: {
+              startTime: {
+                type: Type.STRING,
+                description: "The start time of the topic segment in HH:MM:SS or MM:SS format."
+              },
+              endTime: {
+                type: Type.STRING,
+                description: "The end time of the topic segment in HH:MM:SS or MM:SS format."
+              },
+              topicDescription: {
+                type: Type.STRING,
+                description: "A concise (1-2 sentences) description of the main topic covered in this segment of the video."
+              }
+            },
+            required: ['startTime', 'endTime', 'topicDescription']
+          }
+        }
+      },
+      required: ['segments']
+    }
+  }
 ];
 
 export default (fnMap) =>

@@ -227,6 +227,19 @@ Respond by calling the 'set_register_analysis_result' function with a single JSO
 }`,
     isRegisterType: true,
   },
+
+  'Topic Segmentation': {
+    emoji: '🧩',
+    prompt: `Please analyze the provided video to identify distinct conceptual and thematic segments.
+Your goal is to break the video down into logical parts based on the topics discussed or shown.
+For each identified segment, determine a precise start time and end time (in HH:MM:SS or MM:SS format).
+Also, provide a concise (1-2 sentences) textual description that clearly summarizes the main topic of that segment.
+Consider all available information in the video, including spoken words, visual elements, on-screen text, and overall narrative flow to make your segmentation decisions.
+The segments should be sequential and cover the main parts of the video. Aim for segments that are neither too short (trivial) nor too long (covering multiple distinct topics).
+Use the 'set_topic_segments' function to return all identified segments. Your response MUST be a call to the 'set_topic_segments' function. Do not wrap your response in any markdown formatting or code blocks.`,
+    isList: true,
+  },
+
   'Segment Summary': {
     emoji: '📋',
     prompt: `Summarize this video and identify the key topics discussed.

@@ -55,6 +55,13 @@ interface AppFileState {
   name: string; // Original file name from browser File object
 }
 
+// New interface for Topic Segmentation
+interface TopicSegment {
+  startTime: string; // e.g., "00:01:15"
+  endTime: string;   // e.g., "00:05:30"
+  topicDescription: string;
+}
+
 
 const modes: Modes = modesData; // Assert type for modes
 
@@ -66,6 +73,7 @@ export default function App() {
   const [file, setFile] = useState<AppFileState | null>(null);
   const [timecodeList, setTimecodeList] = useState<Timecode[] | null>(null);
   const [registerAnalysisResult, setRegisterAnalysisResult] = useState<object | null>(null);
+  const [topicSegments, setTopicSegments] = useState<TopicSegment[] | null>(null); // New state for topic segments
   const [requestedTimecode, setRequestedTimecode] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState<string>(Object.keys(modes)[0]);
   const [activeMode, setActiveMode] = useState<string | undefined>();
@@ -100,13 +108,49 @@ export default function App() {
     setRegisterAnalysisResult(analysisResult);
   };
 
+  const handleSetTopicSegments = ({ segments }: { segments: TopicSegment[] }) => {
+    const processedSegments = segments.map(segment => ({
+      ...segment,
+      topicDescription: segment.topicDescription.replace(/\\'/g, "'"),
+    }));
+    setTopicSegments(processedSegments);
+  };
+
+  // Define the map for Gemini function callbacks
+  const fnMapForGemini = {
+    set_timecodes: (args: { timecodes: Timecode[] }) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes with args:`, JSON.stringify(args, null, 2));
+        setTimecodes(args);
+    },
+    set_timecodes_with_objects: (args: { timecodes: Timecode[] }) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes_with_objects with args:`, JSON.stringify(args, null, 2));
+        setTimecodes(args);
+    },
+    set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_timecodes_with_numeric_values with args:`, JSON.stringify({timecodes}, null, 2));
+        setTimecodeList(timecodes);
+    },
+    set_register_analysis_result: (args: { analysisResult: object }) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_register_analysis_result with args:`, JSON.stringify(args, null, 2));
+        setRegisterResult(args);
+    },
+    set_topic_segments: (args: { segments: TopicSegment[] }) => {
+        console.log(`[${new Date().toISOString()}] Gemini called: set_topic_segments with args:`, JSON.stringify(args, null, 2));
+        handleSetTopicSegments(args);
+    },
+  };
+
   const onModeSelect = async (mode: string) => {
-    if (!file) return; // Ensure file is uploaded before generating
+    if (!file) {
+      console.warn(`[${new Date().toISOString()}] 'onModeSelect' called for mode '${mode}' but no file is loaded. Aborting.`);
+      return;
+    }
     setActiveMode(mode);
     setIsLoading(true);
     setChartLabel(chartPrompt);
-    setTimecodeList(null); // Clear previous results
-    setRegisterAnalysisResult(null); // Clear previous register results
+    setTimecodeList(null); 
+    setRegisterAnalysisResult(null);
+    setTopicSegments(null); 
 
     const currentModeConfig = modes[mode as keyof typeof modes];
     let promptValue: string;
@@ -120,37 +164,69 @@ export default function App() {
         promptValue = currentModeConfig.prompt as string;
     }
 
-    const resp = await generateContent(
-      promptValue,
-      functions({
-        set_timecodes: setTimecodes,
-        set_timecodes_with_objects: setTimecodes,
-        set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
-          setTimecodeList(timecodes),
-        set_register_analysis_result: setRegisterResult,
-      }),
-      { uri: file.uri, mimeType: file.apiMimeType },
-    );
+    console.log(`[${new Date().toISOString()}] Activating mode: ${mode}.`);
+    if (isCustomMode) console.log(`[${new Date().toISOString()}] Custom prompt: ${customPrompt.substring(0,150)}...`);
+    if (isChartMode) console.log(`[${new Date().toISOString()}] Chart mode selected: ${chartMode}. Custom chart prompt: ${isCustomChartMode ? chartPrompt.substring(0,150)+'...' : 'N/A'}`);
+    console.log(`[${new Date().toISOString()}] Full prompt for API (first 200 chars): ${promptValue.substring(0, 200)}${promptValue.length > 200 ? '...' : ''}`);
 
-    if (resp.functionCalls && resp.functionCalls.length > 0) {
-      const fnMap = {
-        set_timecodes: setTimecodes,
-        set_timecodes_with_objects: setTimecodes,
-        set_timecodes_with_numeric_values: ({timecodes}: {timecodes: Timecode[]}) =>
-          setTimecodeList(timecodes),
-        set_register_analysis_result: setRegisterResult,
-      };
-      for (const call of resp.functionCalls) {
-        if (fnMap[call.name as keyof typeof fnMap]) {
-          (fnMap as any)[call.name](call.args);
-        } else {
-          console.warn(`Unknown function call in response: ${call.name}`);
+    try {
+      const resp = await generateContent(
+        promptValue,
+        functions(fnMapForGemini), 
+        { uri: file.uri, mimeType: file.apiMimeType },
+      );
+
+      console.log(`[${new Date().toISOString()}] API Response for mode ${mode}:`, JSON.stringify(resp, null, 2));
+      
+      let functionCalledBySDK = false;
+      // Check if any of our logging inside callbacks was triggered
+      // This is a bit of a hack; ideally, the SDK would provide a more direct way to know.
+      // For this check, we'll assume if a state that is set by a callback is populated, it was called.
+      // This is imperfect because state might be set then cleared by this same onModeSelect run.
+      // A more robust check would be to have callbacks set a temporary flag.
+      // For now, we rely on the manual loop as a fallback.
+
+      // Manual function call execution if SDK didn't (or if we want to be certain)
+      // This is useful if the SDK's automatic callback execution is missed for some reason.
+      if (resp.functionCalls && resp.functionCalls.length > 0) {
+        console.log(`[${new Date().toISOString()}] Inspecting ${resp.functionCalls.length} function call(s) from API response.`);
+        let manuallyCalledCount = 0;
+        for (const funcCall of resp.functionCalls) {
+          const callbackToExecute = fnMapForGemini[funcCall.name as keyof typeof fnMapForGemini];
+          if (callbackToExecute) {
+            // Check if the specific log for this callback has already appeared (implies SDK ran it)
+            // This is a proxy, real check would need more complex state.
+            // For simplicity, we'll just call it, assuming callbacks are idempotent or safe to recall.
+            // Or, better, rely on the console logs to see if "Gemini called: <functionName>" appeared before this manual loop.
+            console.log(`[${new Date().toISOString()}] Manually executing function from API response: ${funcCall.name}`);
+            try {
+                // Cast args to `any` to satisfy the diverse signatures, specific callbacks will handle their expected types.
+                (callbackToExecute as (args: any) => void)(funcCall.args);
+                manuallyCalledCount++;
+            } catch (manualExecError) {
+              console.error(`[${new Date().toISOString()}] Error during manual execution of ${funcCall.name}:`, manualExecError);
+            }
+          } else {
+            console.warn(`[${new Date().toISOString()}] No callback found in fnMapForGemini for function call: ${funcCall.name}`);
+          }
         }
+        if (manuallyCalledCount > 0) {
+            console.log(`[${new Date().toISOString()}] Manually executed ${manuallyCalledCount} function(s).`);
+        }
+      } else { // This 'else' corresponds to the 'if (resp.functionCalls && resp.functionCalls.length > 0)'
+          console.warn(`[${new Date().toISOString()}] API response for mode ${mode} did not include any function calls list from the model.`);
+          if (resp.text && resp.text.trim() !== '') {
+             console.warn(`[${new Date().toISOString()}] Model returned direct text output instead of function call for mode ${mode}: "${resp.text.substring(0, 200)}${resp.text.length > 200 ? '...' : ''}"`);
+          }
       }
-    }
 
-    setIsLoading(false);
-    scrollRef.current?.scrollTo({top: 0, behavior: 'smooth'});
+
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error during 'onModeSelect' for mode ${mode}:`, error);
+    } finally {
+      setIsLoading(false);
+      scrollRef.current?.scrollTo({top: 0, behavior: 'smooth'});
+    }
   };
 
   const processAndSetFile = async (clientUploadedFile: File | null) => {
@@ -160,10 +236,14 @@ export default function App() {
     setVidUrl(URL.createObjectURL(clientUploadedFile));
     setTimecodeList(null);
     setRegisterAnalysisResult(null);
+    setTopicSegments(null); 
     setFile(null);
     setVideoError(false);
+    setActiveMode(undefined); 
+
 
     try {
+      console.log(`[${new Date().toISOString()}] Processing file: ${clientUploadedFile.name}`);
       const res = await uploadFileToApi(clientUploadedFile);
       setFile({
         displayName: res.displayName || clientUploadedFile.name,
@@ -172,9 +252,10 @@ export default function App() {
         uri: res.uri,
         name: clientUploadedFile.name,
       });
+      console.log(`[${new Date().toISOString()}] File processed successfully: ${res.displayName}`);
       setIsLoadingVideo(false);
     } catch (err) {
-      console.error('Error processing file:', err);
+      console.error(`[${new Date().toISOString()}] Error processing file ${clientUploadedFile.name}:`, err);
       setVideoError(true);
       setIsLoadingVideo(false);
     }
@@ -183,13 +264,15 @@ export default function App() {
   const handleDragUpload = async (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files[0];
+    console.log(`[${new Date().toISOString()}] File dragged and dropped: ${droppedFile?.name}`);
     processAndSetFile(droppedFile);
   };
 
   const handleFileSelectedChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files ? event.target.files[0] : null;
+    console.log(`[${new Date().toISOString()}] File selected via input: ${selectedFile?.name}`);
     processAndSetFile(selectedFile);
-    if (event.target) { // Clear input value to allow re-selecting the same file
+    if (event.target) { 
       event.target.value = '';
     }
   };
@@ -200,50 +283,80 @@ export default function App() {
 
 
   const handleExport = () => {
-    if (!timecodeList || timecodeList.length === 0 || !file || !file.name) {
-      alert("No VTT-compatible annotations or video file details available to export. Please ensure a video is processed and has a valid file name.");
+    let vttContent = "WEBVTT\n\n";
+
+    if (!file || !file.name) {
+      alert("No video file details available to export. Please ensure a video is processed and has a valid file name.");
+      console.warn(`[${new Date().toISOString()}] Export called but no file details available.`);
       return;
     }
+    const videoFileName = file.name;
 
-    const videoFileName = file.name; 
+    let dataAvailableToExport = false;
 
-    let vttContent = "WEBVTT\n\n";
-    timecodeList.forEach((item, index) => {
-      const startTimeSecs = timeToSecs(item.time);
-      let endTimeSecs;
+    if (activeMode === 'Topic Segmentation' && topicSegments && topicSegments.length > 0) {
+      dataAvailableToExport = true;
+      topicSegments.forEach((segment, index) => {
+        const startTimeSecs = timeToSecs(segment.startTime);
+        let endTimeSecs = timeToSecs(segment.endTime);
 
-      if (index < timecodeList.length - 1) {
-        endTimeSecs = timeToSecs(timecodeList[index + 1].time);
-        if (endTimeSecs <= startTimeSecs) { 
+        if (endTimeSecs <= startTimeSecs) {
           endTimeSecs = startTimeSecs + 0.5; 
         }
-      } else {
-        const videoDuration = videoRef.current?.duration;
-        if (videoDuration && startTimeSecs < videoDuration) {
-           endTimeSecs = Math.min(startTimeSecs + 5, videoDuration);
-        } else {
-           endTimeSecs = startTimeSecs + 5;
-        }
-      }
+        const captionText = segment.topicDescription.replace(/\n/g, ' ');
+        
+        vttContent += `${index + 1}\n`;
+        vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
+        vttContent += `${captionText}\n\n`;
+      });
+      console.log(`[${new Date().toISOString()}] Exporting ${topicSegments.length} topic segments.`);
+    } else if (timecodeList && timecodeList.length > 0) {
+      dataAvailableToExport = true;
+      timecodeList.forEach((item, index) => {
+        const startTimeSecs = timeToSecs(item.time);
+        let endTimeSecs;
 
-      const captionText = item.value !== undefined ? String(item.value) : (item.text || "");
-      
-      vttContent += `${index + 1}\n`; 
-      vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
-      vttContent += `${captionText.replace(/\n/g, ' ')}\n\n`;
-    });
+        if (index < timecodeList.length - 1) {
+          endTimeSecs = timeToSecs(timecodeList[index + 1].time);
+          if (endTimeSecs <= startTimeSecs) { 
+            endTimeSecs = startTimeSecs + 0.5; 
+          }
+        } else {
+          const videoDuration = videoRef.current?.duration;
+          if (videoDuration && startTimeSecs < videoDuration) {
+            endTimeSecs = Math.min(startTimeSecs + 5, videoDuration); 
+          } else {
+            endTimeSecs = startTimeSecs + 5; 
+          }
+        }
+
+        const captionText = item.value !== undefined ? String(item.value) : (item.text || "");
+        
+        vttContent += `${index + 1}\n`; 
+        vttContent += `${secsToVttTime(startTimeSecs)} --> ${secsToVttTime(endTimeSecs)}\n`;
+        vttContent += `${captionText.replace(/\n/g, ' ')}\n\n`;
+      });
+      console.log(`[${new Date().toISOString()}] Exporting ${timecodeList.length} timecode items.`);
+    }
+
+    if (!dataAvailableToExport) {
+      alert("No annotations available to export for the current mode.");
+      console.warn(`[${new Date().toISOString()}] Export called, but no data available for activeMode: ${activeMode}.`);
+      return;
+    }
     
     const blob = new Blob([vttContent], { type: 'text/vtt' });
     const anchor = document.createElement('a');
     anchor.href = URL.createObjectURL(blob);
     
     const safeDisplayName = videoFileName.replace(/[^a-z0-9_.-]/gi, '_').split('.')[0];
-    anchor.download = `${safeDisplayName}_annotations.vtt`;
+    anchor.download = `${safeDisplayName}_${activeMode === 'Topic Segmentation' ? 'segments' : 'annotations'}.vtt`;
     
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(anchor.href);
+    console.log(`[${new Date().toISOString()}] VTT file exported: ${anchor.download}`);
   };
   
   const currentActiveModeConfig = activeMode ? modes[activeMode as keyof typeof modes] : undefined;
@@ -400,7 +513,7 @@ export default function App() {
           isLoadingVideo={isLoadingVideo}
           videoError={videoError}
           videoRef={videoRef}
-          onUploadButtonClick={handleUploadButtonClick} // Pass handler to VideoPlayer
+          onUploadButtonClick={handleUploadButtonClick} 
         />
       </section>
 
@@ -453,7 +566,7 @@ export default function App() {
                       yLabel={isCustomChartMode ? chartLabel : modes.Chart.subModes?.[chartMode] || chartLabel}
                       jumpToTimecode={setRequestedTimecode}
                     />
-                  ) : currentActiveModeConfig?.isList ? (
+                  ) : currentActiveModeConfig?.isList && activeMode !== 'Topic Segmentation' ? ( 
                     <ul>
                       {timecodeList.map(({time, text}, i) => (
                         <li key={i} className="outputItem">
@@ -467,7 +580,8 @@ export default function App() {
                         </li>
                       ))}
                     </ul>
-                  ) : (
+                  ) : ( 
+                    !currentActiveModeConfig?.isRegisterType && activeMode !== 'Topic Segmentation' &&
                     timecodeList.map(({time, text}, i) => (
                       text ? <span
                         key={i}
@@ -483,7 +597,8 @@ export default function App() {
                       </span> : null
                     ))
                   )}
-                  {file && (
+                  {/* Generic Export Button: Show if file exists, activeMode is NOT Topic Segmentation, and timecodeList has data */}
+                  {file && activeMode !== 'Topic Segmentation' && timecodeList && timecodeList.length > 0 && (
                     <button
                       className="button exportButton"
                       onClick={handleExport}
@@ -499,9 +614,42 @@ export default function App() {
 
               {/* Section for Register Analysis JSON output */}
               {currentActiveModeConfig?.isRegisterType && registerAnalysisResult && (
-                <div className="registerOutputSection" style={{ marginTop: (timecodeList && timecodeList.length > 0) ? '20px' : '0' }}>
+                <div className="registerOutputSection" style={{ marginTop: (timecodeList && timecodeList.length > 0 && activeMode !== 'Topic Segmentation') ? '20px' : '0' }}>
                   <h4>{activeMode} - Structured Analysis:</h4>
                   <pre className="jsonOutput">{JSON.stringify(registerAnalysisResult, null, 2)}</pre>
+                </div>
+              )}
+
+              {/* Display Topic Segments */}
+              {activeMode === 'Topic Segmentation' && topicSegments && topicSegments.length > 0 && (
+                <div className="topicSegmentsOutputSection" style={{ marginTop: '0px' }}> 
+                  <ul>
+                    {topicSegments.map((segment, index) => (
+                      <li key={index} className="outputItem">
+                        <button 
+                          onClick={() => setRequestedTimecode(timeToSecs(segment.startTime))}
+                          aria-label={`Jump to topic segment starting at ${segment.startTime}: ${segment.topicDescription}`}
+                        >
+                          <time dateTime={segment.startTime}>{segment.startTime}</time>
+                          <span> - </span>
+                          <time dateTime={segment.endTime}>{segment.endTime}</time>
+                          <p className="text" style={{ marginLeft: '10px' }}>{segment.topicDescription}</p>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {/* Topic Segmentation Specific Export Button */}
+                  {file && (
+                     <button
+                       className="button exportButton"
+                       onClick={handleExport}
+                       disabled={!file.name}
+                       aria-label="Export topic segments as VTT file"
+                     >
+                       <span className="icon" aria-hidden="true">download</span>
+                       Export VTT File
+                     </button>
+                   )}
                 </div>
               )}
 
@@ -509,6 +657,7 @@ export default function App() {
               {!isLoading && 
                (!timecodeList || timecodeList.length === 0) && 
                (!registerAnalysisResult || Object.keys(registerAnalysisResult).length === 0) && 
+               (!topicSegments || topicSegments.length === 0) && 
                vidUrl && file && activeMode && (
                 <p>No annotations or analysis generated for this mode yet, or the model didn't return any.</p>
               )}

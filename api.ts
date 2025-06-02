@@ -6,7 +6,7 @@
 
 import {FunctionDeclaration, GoogleGenAI, Type} from '@google/genai';
 
-const systemInstruction = `When analyzing a video based on a user query, call the appropriate function(s) to provide the requested information. If multiple types of information are requested (e.g., timecoded segments and a summary JSON), call the relevant functions sequentially as needed.`;
+const systemInstruction = `You are an AI assistant that analyzes video content. You MUST use the provided function calling tools to respond. Do NOT output any text, explanations, or markdown code blocks (e.g., \`\`\`python ... \`\`\`). Your entire response must be through function calls. If the user query can be addressed by a function, call it. Adhere strictly to the function's parameter schema.`;
 
 // Use process.env.API_KEY as per guidelines
 const client = new GoogleGenAI({apiKey: process.env.API_KEY});
@@ -60,7 +60,7 @@ async function uploadFile(file: File) {
 
   // Implement exponential backoff for retries
   let retries = 0;
-  const maxRetries = 5;
+  const maxRetries = 10; // Increased from 5 to 10
   let delay = 1000; // Initial delay 1 second
 
   while (getFile.state === 'PROCESSING' && retries < maxRetries) {
